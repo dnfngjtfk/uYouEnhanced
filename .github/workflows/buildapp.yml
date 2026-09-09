@@ -163,6 +163,16 @@ jobs:
         env:
           YOUTUBE_URL: ${{ env.URL_YT }}
 
+      - name: Build YTUHD vendor libs (libvpx, dav1d)
+        if: ${{ inputs.ytuhd }}
+        run: |
+          cd main/Tweaks/YTUHD
+          echo "=== building libvpx ==="
+          make libvpx
+          echo "=== building dav1d ==="
+          make dav1d
+          echo "=== checking outputs ==="
+          ls -la vendor/libvpx_ios/ vendor/dav1d_ios/
       - name: Fix compiling & Build Package
         id: build_package
         run: |
