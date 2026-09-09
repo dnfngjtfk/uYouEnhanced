@@ -78,8 +78,8 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          brew install ldid dpkg make wget unzip jq pipx
-
+          brew install ldid dpkg make wget unzip jq pipx meson ninja nasm pkg-config
+          
       - name: Set PATH
         run: echo "$(brew --prefix make)/libexec/gnubin" >> $GITHUB_PATH
 
