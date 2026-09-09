@@ -270,6 +270,31 @@ jobs:
           cd main/Tweaks/YTUHD
           git submodule update --init --recursive
 
+
+
+
+
+
+
+
+
+
+
+
+
+      - name: Fix YTweaks deprecation errors
+        run: |
+          cd main/Tweaks/YTweaks
+          # убираем -Werror и добавляем подавление deprecated-предупреждений
+          sed -i '' 's/-Werror//g' Makefile
+          perl -0777 -pi -e 's/(include \$\(THEOS_MAKE_PATH\)\/tweak\.mk)/YTweaks_CFLAGS += -Wno-deprecated-declarations\n$1/' Makefile
+          echo "--- patched Makefile ---"
+          cat Makefile
+
+
+
+
+      
       - name: Fix compiling & Build Package
         id: build_package
         shell: bash
@@ -462,9 +487,8 @@ jobs:
             echo "Registered alternate icon: $NAME"
           done
 
-          "$PB" -c "Print :CFBundleIcons:CFBundleAlternateIcons" 
-          "$PLIST" \
-            | sed -n '1,20p'
+          "$PB" -c "Print :CFBundleIcons:CFBundleAlternateIcons"
+          "$PLIST" | sed -n '1,20p'
           zip -q "../$IPA" "$PLIST" Payload/YouTube.app/*.png
           cd .. && rm -rf iconwork
           echo "Alternate icons registered into $(basename "$IPA")"
