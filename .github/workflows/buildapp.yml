@@ -163,33 +163,34 @@ jobs:
         env:
           YOUTUBE_URL: ${{ env.URL_YT }}
 
-      - name: Build YTUHD vendor libs (libvpx, dav1d)
-        if: ${{ inputs.ytuhd }}
-        run: |
-          cd main/Tweaks/YTUHD
-          echo "=== building libvpx ==="
-          make libvpx
-          echo "=== building dav1d ==="
-          make dav1d
-          echo "=== checking outputs ==="
-          ls -la vendor/libvpx_ios/ vendor/dav1d_ios/
-        env:
-          THEOS: ${{ github.workspace }}/theos
-          
       - name: Fix compiling & Build Package
         id: build_package
+        shell: bash
         run: |
+          set -euo pipefail
+
           cd main
+
           if [[ "${{ inputs.ytuhd }}" == "true" ]]; then
             [ -e vendor ] || ln -s Tweaks/YTUHD/vendor vendor
             test -f vendor/dav1d/include/dav1d/dav1d.h
             test -f vendor/libvpx/vpx/vpx_decoder.h
           fi
+
           sed -i '' "s/^BUNDLE_ID .*/BUNDLE_ID = ${{ inputs.bundle_id }}/" Makefile || echo "BUNDLE_ID = ${{ inputs.bundle_id }}" >> Makefile
           sed -i '' "s/^DISPLAY_NAME .*/DISPLAY_NAME = ${{ inputs.app_name }}/" Makefile || echo "DISPLAY_NAME = ${{ inputs.app_name }}" >> Makefile
           sed -i '' "s/^export TARGET .*/export TARGET = iphone:clang:${{ inputs.sdk_version }}:16.0/" Makefile || echo "export TARGET = iphone:clang:${{ inputs.sdk_version }}:16.0" >> Makefile
-          make package THEOS_PACKAGE_SCHEME=rootless IPA=Payload/YouTube.app FINALPACKAGE=1 YTUHD_ENABLED=${{ inputs.ytuhd && '1' || '0' }} SPONSORBLOCK_ENABLED=${{ inputs.sponsorblock && '1' || '0' }} SIDELOAD=1          echo "package=$(ls -t packages | head -n1)" >> $GITHUB_OUTPUT
 
+          make package \
+            THEOS_PACKAGE_SCHEME=rootless \
+            IPA=Payload/YouTube.app \
+            FINALPACKAGE=1 \
+            YTUHD_ENABLED=${{ inputs.ytuhd && '1' || '0' }} \
+            SPONSORBLOCK_ENABLED=${{ inputs.sponsorblock && '1' || '0' }} \
+            SIDELOAD=1
+
+          pkg="$(ls -t packages/*.deb | head -n 1)"
+          echo "package=$(basename "$pkg")" >> "$GITHUB_OUTPUT"
         env:
           THEOS: ${{ github.workspace }}/theos
           UYOU_VERSION: ${{ inputs.uyou_version }}
