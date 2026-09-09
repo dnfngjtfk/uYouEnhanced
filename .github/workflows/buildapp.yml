@@ -164,107 +164,6 @@ jobs:
           YOUTUBE_URL: ${{ env.URL_YT }}
 
 
-
-
-      - name: Init YTUHD vendor submodules
-        if: ${{ inputs.ytuhd }}
-        run: |
-          cd main/Tweaks/YTUHD
-          git submodule update --init --recursive
-
-      - name: Fix compiling & Build Package
-        id: build_package
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          cd main
-
-          if [[ "${{ inputs.ytuhd }}" == "true" ]]; then
-            # Создаём симлинк на vendor из YTUHD
-            [ -e vendor ] || ln -s Tweaks/YTUHD/vendor vendor
-
-            # ===== СОБИРАЕМ СТАТИЧЕСКИЕ БИБЛИОТЕКИ =====
-            echo "==> Building libvpx for iOS (arm64)..."
-            cd vendor/libvpx
-            mkdir -p build_ios && cd build_ios
-            ../configure --target=arm64-darwin-gcc \
-                         --disable-examples \
-                         --disable-tools \
-                         --disable-docs \
-                         --disable-unit-tests \
-                         --enable-pic \
-                         --enable-static \
-                         --disable-shared \
-                         --extra-cflags="-arch arm64 -isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=16.0" \
-                         --extra-cxxflags="-arch arm64 -isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=16.0"
-            make -j$(sysctl -n hw.ncpu)
-            mkdir -p ../../libvpx_ios
-            cp libvpx.a ../../libvpx_ios/libvpx.a
-            cd ../../..
-            echo "==> libvpx.a built successfully"
-
-            echo "==> Building dav1d for iOS (arm64)..."
-            cd vendor/dav1d
-            
-            # Создаём cross-файл для meson
-            cat > ios-arm64-cross.txt << 'CROSSEOF'
-          [binaries]
-          c = 'clang'
-          ar = 'ar'
-          strip = 'strip'
-
-          [built-in options]
-          c_args = ['-arch', 'arm64', '-isysroot', '%%%SDK_PATH%%%', '-miphoneos-version-min=16.0']
-          c_link_args = ['-arch', 'arm64', '-isysroot', '%%%SDK_PATH%%%', '-miphoneos-version-min=16.0']
-
-          [host_machine]
-          system = 'darwin'
-          cpu_family = 'aarch64'
-          cpu = 'arm64'
-          endian = 'little'
-          CROSSEOF
-
-            SDK_PATH="$(xcrun --sdk iphoneos --show-sdk-path)"
-            sed -i '' "s|%%%SDK_PATH%%%|${SDK_PATH}|g" ios-arm64-cross.txt
-
-            meson setup build_ios \
-              --cross-file ios-arm64-cross.txt \
-              --default-library=static \
-              -Denable_tools=false \
-              -Denable_tests=false \
-              -Denable_examples=false
-            ninja -C build_ios
-            mkdir -p ../dav1d_ios
-            cp build_ios/src/libdav1d.a ../dav1d_ios/libdav1d.a
-            cd ../..
-            echo "==> libdav1d.a built successfully"
-
-            # Проверяем, что файлы на месте
-            test -f vendor/libvpx_ios/libvpx.a
-            test -f vendor/dav1d_ios/libdav1d.a
-            ls -lh vendor/libvpx_ios/libvpx.a vendor/dav1d_ios/libdav1d.a
-          fi
-
-          sed -i '' "s/^BUNDLE_ID .*/BUNDLE_ID = ${{ inputs.bundle_id }}/" Makefile || echo "BUNDLE_ID = ${{ inputs.bundle_id }}" >> Makefile
-          sed -i '' "s/^DISPLAY_NAME .*/DISPLAY_NAME = ${{ inputs.app_name }}/" Makefile || echo "DISPLAY_NAME = ${{ inputs.app_name }}" >> Makefile
-          sed -i '' "s/^export TARGET .*/export TARGET = iphone:clang:${{ inputs.sdk_version }}:16.0/" Makefile || echo "export TARGET = iphone:clang:${{ inputs.sdk_version }}:16.0" >> Makefile
-
-          make package \
-            THEOS_PACKAGE_SCHEME=rootless \
-            IPA=Payload/YouTube.app \
-            FINALPACKAGE=1 \
-            YTUHD_ENABLED=${{ inputs.ytuhd && '1' || '0' }} \
-            SPONSORBLOCK_ENABLED=${{ inputs.sponsorblock && '1' || '0' }} \
-            SIDELOAD=1
-
-          pkg="$(ls -t packages/*.deb | head -n 1)"
-          echo "package=$(basename "$pkg")" >> "$GITHUB_OUTPUT"
-        env:
-          THEOS: ${{ github.workspace }}/theos
-          UYOU_VERSION: ${{ inputs.uyou_version }}
-
-          
       - name: Clone Open in YouTube (Safari Extension)
         run: |
           git clone --quiet -n --depth=1 --filter=tree:0 https://github.com/BillyCurtis/OpenYouTubeSafariExtension.git OpenYouTubeSafariExtension
@@ -364,16 +263,148 @@ jobs:
           echo "Normalization complete."
         shell: bash
 
-      - name: Inject Tweaks Into IPA
-        run: |
-          IPA_IN="main/packages/${{ steps.build_package.outputs.package }}"
-          OUTNAME="uYouEnhanced_${{ env.YT_VERSION }}_v${{ inputs.uyou_version }}.ipa"
-          tweaks="OpenYouTubeSafariExtension.appex"
-          for f in main/packages/*.deb; do
-            [ -f "$f" ] && tweaks="$tweaks $f"
-          done
-          cyan -i "$IPA_IN" -o "$OUTNAME" -uwef $tweaks -n "${{ inputs.app_name }}" -b ${{ inputs.bundle_id }}
 
+      - name: Init YTUHD vendor submodules
+        if: ${{ inputs.ytuhd }}
+        run: |
+          cd main/Tweaks/YTUHD
+          git submodule update --init --recursive
+
+      - name: Fix compiling & Build Package
+        id: build_package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd main
+
+          if [[ "${{ inputs.ytuhd }}" == "true" ]]; then
+            # Создаём симлинк на vendor из YTUHD
+            [ -e vendor ] || ln -s Tweaks/YTUHD/vendor vendor
+
+            # ===== СОБИРАЕМ СТАТИЧЕСКИЕ БИБЛИОТЕКИ =====
+            echo "==> Building libvpx for iOS (arm64)..."
+            cd vendor/libvpx
+            mkdir -p build_ios && cd build_ios
+            ../configure --target=arm64-darwin-gcc \
+                         --disable-examples \
+                         --disable-tools \
+                         --disable-docs \
+                         --disable-unit-tests \
+                         --enable-pic \
+                         --enable-static \
+                         --disable-shared \
+                         --extra-cflags="-arch arm64 -isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=16.0" \
+                         --extra-cxxflags="-arch arm64 -isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=16.0"
+            make -j$(sysctl -n hw.ncpu)
+            mkdir -p ../../libvpx_ios
+            cp libvpx.a ../../libvpx_ios/libvpx.a
+            cd ../../..
+            echo "==> libvpx.a built successfully"
+
+            echo "==> Building dav1d for iOS (arm64)..."
+            cd vendor/dav1d
+            
+            # Создаём cross-файл для meson
+            cat > ios-arm64-cross.txt << 'CROSSEOF'
+          [binaries]
+          c = 'clang'
+          ar = 'ar'
+          strip = 'strip'
+
+          [built-in options]
+          c_args = ['-arch', 'arm64', '-isysroot', '%%%SDK_PATH%%%', '-miphoneos-version-min=16.0']
+          c_link_args = ['-arch', 'arm64', '-isysroot', '%%%SDK_PATH%%%', '-miphoneos-version-min=16.0']
+
+          [host_machine]
+          system = 'darwin'
+          cpu_family = 'aarch64'
+          cpu = 'arm64'
+          endian = 'little'
+          CROSSEOF
+
+            SDK_PATH="$(xcrun --sdk iphoneos --show-sdk-path)"
+            sed -i '' "s|%%%SDK_PATH%%%|${SDK_PATH}|g" ios-arm64-cross.txt
+
+            meson setup build_ios \
+              --cross-file ios-arm64-cross.txt \
+              --default-library=static \
+              -Denable_tools=false \
+              -Denable_tests=false \
+              -Denable_examples=false
+            ninja -C build_ios
+            mkdir -p ../dav1d_ios
+            cp build_ios/src/libdav1d.a ../dav1d_ios/libdav1d.a
+            cd ../..
+            echo "==> libdav1d.a built successfully"
+
+            # Проверяем, что файлы на месте
+            test -f vendor/libvpx_ios/libvpx.a
+            test -f vendor/dav1d_ios/libdav1d.a
+            ls -lh vendor/libvpx_ios/libvpx.a vendor/dav1d_ios/libdav1d.a
+          fi
+
+          IPA_NAME="uYouEnhanced-base.ipa"
+
+          make package \
+            THEOS_PACKAGE_SCHEME=rootless \
+            IPA=Payload/YouTube.app \
+            FINALPACKAGE=1 \
+            SDK_VERSION="$SDK_VERSION" \
+            TARGET="iphone:clang:${SDK_VERSION}:16.0" \
+            BUNDLE_ID="$APP_BUNDLE_ID" \
+            DISPLAY_NAME="$APP_DISPLAY_NAME" \
+            YOUTUBE_VERSION="$YT_VERSION" \
+            YTUHD_ENABLED="$YTUHD_ENABLED" \
+            SPONSORBLOCK_ENABLED="$SPONSORBLOCK_ENABLED" \
+            SIDELOAD=1 \
+            OUTPUT_NAME="$IPA_NAME"
+
+          if [[ ! -s "packages/$IPA_NAME" ]]; then
+            echo "::error::Theos did not create packages/$IPA_NAME"
+            ls -lah packages || true
+            exit 1
+          fi
+
+          unzip -tq "packages/$IPA_NAME"
+          echo "package=$IPA_NAME" >> "$GITHUB_OUTPUT"
+          
+        env:
+          THEOS: ${{ github.workspace }}/theos
+          UYOU_VERSION: ${{ inputs.uyou_version }}
+          SDK_VERSION: ${{ inputs.sdk_version }}
+          APP_BUNDLE_ID: ${{ inputs.bundle_id }}
+          APP_DISPLAY_NAME: ${{ inputs.app_name }}
+          YTUHD_ENABLED: ${{ inputs.ytuhd && '1' || '0' }}
+          SPONSORBLOCK_ENABLED: ${{ inputs.sponsorblock && '1' || '0' }}
+
+          
+      - name: Inject Tweaks Into IPA
+        shell: bash
+        env:
+          IPA_FILE: ${{ steps.build_package.outputs.package }}
+          UYOU_VERSION: ${{ inputs.uyou_version }}
+          APP_BUNDLE_ID: ${{ inputs.bundle_id }}
+          APP_DISPLAY_NAME: ${{ inputs.app_name }}
+        run: |
+          set -euo pipefail
+
+          IPA_IN="main/packages/$IPA_FILE"
+          OUTNAME="uYouEnhanced_${YT_VERSION}_v${UYOU_VERSION}.ipa"
+
+          test -s "$IPA_IN"
+          test -d "OpenYouTubeSafariExtension.appex"
+
+          cyan \
+            -i "$IPA_IN" \
+            -o "$OUTNAME" \
+            -u -w -e \
+            -f "OpenYouTubeSafariExtension.appex" \
+            -n "$APP_DISPLAY_NAME" \
+            -b "$APP_BUNDLE_ID"
+
+          test -s "$OUTNAME"
+          
       - name: Strip Unresignable Extensions From Final IPA
         id: strip_ipa
         run: |
@@ -430,7 +461,10 @@ jobs:
             done
             echo "Registered alternate icon: $NAME"
           done
-          $PB -c "Print :CFBundleIcons:CFBundleAlternateIcons" "$PLIST" | head -20
+
+          "$PB" -c "Print :CFBundleIcons:CFBundleAlternateIcons" 
+          "$PLIST" \
+            | sed -n '1,20p'
           zip -q "../$IPA" "$PLIST" Payload/YouTube.app/*.png
           cd .. && rm -rf iconwork
           echo "Alternate icons registered into $(basename "$IPA")"
