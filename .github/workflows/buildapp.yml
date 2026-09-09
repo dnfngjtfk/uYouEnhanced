@@ -487,8 +487,7 @@ jobs:
             echo "Registered alternate icon: $NAME"
           done
 
-          "$PB" -c "Print :CFBundleIcons:CFBundleAlternateIcons"
-          "$PLIST" | sed -n '1,20p'
+          "$PB" -c "Print :CFBundleIcons:CFBundleAlternateIcons" "$PLIST" | sed -n '1,20p' || true
           zip -q "../$IPA" "$PLIST" Payload/YouTube.app/*.png
           cd .. && rm -rf iconwork
           echo "Alternate icons registered into $(basename "$IPA")"
