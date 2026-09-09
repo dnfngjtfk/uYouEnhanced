@@ -173,6 +173,9 @@ jobs:
           make dav1d
           echo "=== checking outputs ==="
           ls -la vendor/libvpx_ios/ vendor/dav1d_ios/
+        env:
+          THEOS: ${{ github.workspace }}/theos
+          
       - name: Fix compiling & Build Package
         id: build_package
         run: |
