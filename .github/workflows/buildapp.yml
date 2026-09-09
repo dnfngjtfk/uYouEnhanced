@@ -167,6 +167,11 @@ jobs:
         id: build_package
         run: |
           cd main
+          if [[ "${{ inputs.ytuhd }}" == "true" ]]; then
+            [ -e vendor ] || ln -s Tweaks/YTUHD/vendor vendor
+            test -f vendor/dav1d/include/dav1d/dav1d.h
+            test -f vendor/libvpx/vpx/vpx_decoder.h
+          fi
           sed -i '' "s/^BUNDLE_ID .*/BUNDLE_ID = ${{ inputs.bundle_id }}/" Makefile || echo "BUNDLE_ID = ${{ inputs.bundle_id }}" >> Makefile
           sed -i '' "s/^DISPLAY_NAME .*/DISPLAY_NAME = ${{ inputs.app_name }}/" Makefile || echo "DISPLAY_NAME = ${{ inputs.app_name }}" >> Makefile
           sed -i '' "s/^export TARGET .*/export TARGET = iphone:clang:${{ inputs.sdk_version }}:16.0/" Makefile || echo "export TARGET = iphone:clang:${{ inputs.sdk_version }}:16.0" >> Makefile
